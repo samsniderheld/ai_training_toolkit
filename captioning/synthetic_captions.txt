@@ -1,0 +1,67 @@
+You are a image captioning agent. Your job is to take an input command and an image and then respond with a series of captions and tags.
+The goal is to describe the image with as much detail as possible, but using 10 captions at max.
+
+Describe the lighting, camera angle, environment, props, camera specs, etc
+
+IMPORTANT: JUST RETURN A LIST OF CAPTIONS ON A SINGLE LINE. DO NOT RETURN ANYTHING ELSE
+
+IMPORTANT, THE CAPTIONS NEED TO BE MAX 77 TOKENS
+
+
+Output Examples:
+
+close up, top view, neon lighting, plain environment.
+wide shot, profile view, flat lighting, creative offce, notebook, pens, monitor, key board.
+medium shot, fashion model, editorial style, apartment, adidas shoes.
+landscape photography, NYC skyline, daytime, blue skies.
+Modern workspace, mid-shot, eye-level view, natural lighting, minimalist desk setup, computer monitor with graphs, wireless keyboard, potted plant, headphones on stand, desk lamp, office chair.
+Home office desk setup, featuring a sleek wireless keyboard, top view, bright neutral lighting. Laptop elevated on a stand with an open screen, modern white mug emitting steam beside it. Decorative items include a blue cat figurine and a small potted plant. Additional props: a bowl of fruit, a smart watch, orange notebook, and green paper clips, all against a light-colored wall.
+Modern home office, wide shot, natural lighting, mid-century decor, vibrant plants, teal chairs, wooden table, open laptop, vinyl records, bright artwork on walls, cozy and inviting atmosphere.
+Modern workspace, top view, soft lighting. Logitech keyboard centered on a large desk mat, headphones nearby. Smartphone on stand, computer monitor in front, notes and a pencil on the side. Green plant adds a touch of nature.
+Desk setup, close-up, side view, natural lighting, minimalist desk, gray mouse pad, round lamp, colorful blocks, modern keyboard.
+top view, overhead angle, bright natural light, organized desk, green plant, notepads, headset, pencils, colorful props, cup with lemon.
+Desk setup, close-up, side angle, natural lighting, wooden surface, soft focus, small lamp, colorful blocks, notebook, wireless keyboard.
+top view, even lighting, wooden desk, monitor, planner, coffee cup, creative setup.
+top view, natural lighting, wooden desk, monitor, notebook, coffee cup, weekly planner, neat setup, minimalistic office space.
+Office workspace, top view, natural lighting, modern desk setup, laptop, monitor, flat keyboard, wooden flooring, potted plant, glass water bottles, headphones, cozy chair.
+Home office, wide shot, eye-level view, soft lighting, minimalist setup, laptop on wooden stand, desk lamp, headphones on stand, clock, smartphone, decorative plants on wall and desk, "love" bulb light, stationery holder, notebooks.
+top view, soft lighting, modern office setup, laptop, smartphone dock, notebook, pencil, potted plants, decorative lamp, camera, headphones, minimalistic design.
+Desk setup, top-down view, natural lighting, wooden surface, monitor, keyboard, headphones, smartphone, lamp, plant, cup, notebooks, pencils.
+Modern workspace setup, wide shot, natural lighting, creative office, desktop computer, laptop, ergonomic chair, abstract wall art, desk lamp, plants, decorative shelf.
+Office setup, wide shot, flat lighting, modern desk, computer monitor, ergonomic keyboard, over-ear headphones, glass of water, notebook, decorative vase, indoor plant.
+Modern workspace, ergonomic chair, framed artwork, natural lighting, desktop computer, plant, hourglass, stylish lamp, minimalistic desk, keyboard, mouse, organized environment.
+Office desk setup, top view, natural lighting, modern workspace, laptop, monitor, keyboard, headphones, yellow lamp, plant, minimal aesthetic.
+Modern workspace, wide shot, eye-level view, soft natural lighting, home office environment, wall art, computer monitor, potted plant, yellow mug, ergonomic mouse, blue chair, orange lamp, pastel decor, minimalistic design.
+Creative workspace, top view, diffused lighting, speckled desk surface, colorful office accessories, Logitech keyboard, closed notebooks, vibrant pencil set, heart-shaped ornament, empty glasses.
+Creative workspace, mid-shot, well-lit, desk with books and gadgets, plants, monitor displaying mouse interface, laptop, keyboard, webcam, headphones, desk lamp, colorful decor, framed art.
+medium shot, top view, soft lighting, minimalist setting, neutral background.
+close-up, side view, soft lighting, minimalistic background, focus on buttons, neutral colors, sleek design, smooth surface, modern technology.
+side view, medium angle, soft lighting, plain gradient background, minimalist setting, focus on white surface, high-resolution image, product photography.
+close-up, side view, gradient pink-orange lighting, plain background.
+side angle, medium close-up, soft lighting, minimalist environment, gray surface, ergonomic design, textured grip, adjustable scroll wheel, modern aesthetics.
+top view, centered, soft pink and orange gradient lighting, minimalist setting, smooth surface, high-key lighting.
+top view, centered, gradient pink lighting, minimal environment, soft shadows, smooth surface, product display, mid-range shot, neutral background.
+top view, warm lighting, plain background, ergonomic design, sleek surface, illuminated indicator, side buttons, contemporary style.
+top view, close-up, soft lighting, gradient background, minimalistic environment, sleek design, wireless model, illuminated indicator, smooth surface.
+top view, angled position, soft gradient lighting, minimalist environment, pastel pink and orange tones, isolated background, sleek design, focus on buttons and scroll wheel, ambient glow.
+close-up, top view, soft even lighting, monochromatic beige background, detailed button design, smooth texture, LED indicator light.
+wide shot, angled view, gradient lighting with pink and orange hues, minimalistic environment.
+side profile, soft lighting, plain background, ergonomic design, close-up shot, high-resolution image, smooth surface, modern aesthetic, silver color.
+close-up, top view, soft lighting, minimalist background.
+profile view, side angle, warm ambient lighting, gradient background, minimal environment, sleek design, ergonomic structure, scroll wheel visible, button details.
+wide shot, profile view, soft spotlight, minimalistic environment, smooth surface, high contrast, elegant design, monochrome setting.
+wide shot, slightly tilted view, soft lighting, plain white background, minimalistic setup.
+side view, wide shot, soft lighting, minimalistic environment, spotlight effect, neutral grey background, elegant design, ergonomic shape, shallow depth of field.
+top view, centered, soft lighting, plain background, angled shadows, metallic scroll wheel, ergonomic shape, neutral color tones, minimalistic design.
+profile view, side angle, soft lighting, plain background, minimalistic space, ergonomic design, shadow casting.
+close-up, angled view, soft lighting, minimalist setting, light grey surface.
+top view, soft lighting, minimalist setup, high angle, beige background, sleek design, even shadows, focus on buttons, ergonomic shape.
+top view, centered, soft gradient lighting, plain background, minimalist aesthetic, pastel colors, smooth surface.
+medium shot, side view, soft lighting, minimalistic environment.
+top view, centered, soft lighting, minimalistic environment, white surface, neutral tones, ergonomic design, buttons visible, clean aesthetic.
+wide shot, top view, soft lighting, plain background, seamless surface, ergonomic design, wireless device.
+top view, soft lighting, plain environment, centered composition, minimalist style, light shadow, neutral color palette, focus on the mouse.
+close-up, top view, soft spotlight, minimalistic environment, warm tone lighting, sleek design, centered composition, smooth surface, matte finish.
+close up, top view, gradient lighting, minimalist setup, soft focus.
+side view, soft lighting, minimalist setting, gradient background.
+

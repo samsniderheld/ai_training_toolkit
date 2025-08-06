@@ -1,0 +1,101 @@
+# Stable Diffusion 3.5 Training Configuration
+job: extension
+config:
+  # This name will be the folder and filename name
+  name: sd35_canova_V2
+  process:
+    - type: sd_trainer
+      # Root folder to save training sessions/samples/weights
+      training_folder: /content/logitech_AI_app/finetuning/output
+      # Uncomment to see performance stats in the terminal every N steps
+      # performance_log_every: 1000
+      device: cuda:0
+      # If a trigger word is specified, it will be added to captions of training data if it does not already exist
+      # Alternatively, in your captions you can add [trigger] and it will be replaced with the trigger word
+      trigger_word: LGTCH_MOUSE
+      
+      network:
+        type: lora
+        linear: 16
+        linear_alpha: 16
+      
+      save:
+        dtype: float16  # precision to save
+        save_every: 250  # save every this many steps
+        max_step_saves_to_keep: 4  # how many intermittent saves to keep
+      
+      datasets:
+        # Datasets are a folder of images. captions need to be txt files with the same name as the image
+        # For instance image2.jpg and image2.txt. Only jpg, jpeg, and png are supported currently
+        # Images will automatically be resized and bucketed into the resolution specified
+        - folder_path: /content/logitech_AI_app/finetuning/datasets/canova_mouse_V2_captioned
+          caption_ext: txt
+          caption_dropout_rate: 0.05  # will drop out the caption 5% of time
+          shuffle_tokens: false  # shuffle caption order, split by commas
+          cache_latents_to_disk: true  # leave this true unless you know what you're doing
+          resolution: [512, 768, 1024]  # flux enjoys multiple resolutions
+      
+      train:
+        batch_size: 4
+        steps: 2000  # total number of steps to train 500 - 4000 is a good range
+        gradient_accumulation_steps: 1
+        train_unet: true
+        train_text_encoder: false  # probably won't work with flux
+        content_or_style: balanced  # content, style, balanced
+        gradient_checkpointing: true  # need this on unless you have a ton of vram
+        noise_scheduler: flowmatch  # for training only
+        lr: 1
+        noise_offset: 0.1
+        lr_scheduler: "cosine"
+        optimizer: "Prodigy"
+        optimizer_params:
+          decouple: true
+          use_bias_correction: False
+          betas: [0.9, 0.99]
+          weight_decay: 0.05
+        
+        # Uncomment this to skip the pre training sample
+        # skip_first_sample: true
+        
+        # Uncomment to completely disable sampling
+        # disable_sampling: true
+        
+        # Uncomment to use new vell curved weighting. Experimental but may produce better results
+        # linear_timesteps: true
+        
+        # EMA will smooth out learning, but could slow it down. Recommended to leave on.
+        ema_config:
+          use_ema: true
+          ema_decay: 0.99
+        
+        # Will probably need this if gpu supports it for flux, other dtypes may not work correctly
+        dtype: bf16
+      
+      model:
+        # Huggingface model name or path
+        name_or_path: black-forest-labs/FLUX.1-dev
+        is_flux: true
+        quantize: true  # run 8bit mixed precision
+        # low_vram: true  # uncomment this if the GPU is connected to your monitors. It will use less vram to quantize, but is slower.
+    
+      sample:
+        sampler: "flowmatch" # must match train.noise_scheduler
+        sample_every: 250 # sample every this many steps
+        width: 1024
+        height: 1024
+        prompts:
+          # you can add [trigger] to the prompts here and it will be replaced with the trigger word
+          - "LGTCH_MOUSE, medium shot, top view, soft lighting, minimalist setting, neutral background."
+          - "LGTCH_MOUSE, side angle, medium close-up, soft lighting, minimalist environment, gray surface, ergonomic design, textured grip, adjustable scroll wheel, modern aesthetics."
+          - "LGTCH_MOUSE, profile view, side angle, warm ambient lighting, gradient background, minimal environment, sleek design, ergonomic structure, scroll wheel visible, button details."
+          - "LGTCH_MOUSE, close up, top view, gradient lighting, minimalist setup, soft focus."
+        neg: ""  
+        seed: 42
+        walk_seed: true
+        guidance_scale: 4
+        sample_steps: 25
+
+# You can add any additional meta info here. [name] is replaced with config name at top
+meta:
+  name: "[name]"
+  version: "1.0"
