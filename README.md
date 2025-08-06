@@ -1,55 +1,73 @@
-# Finetuning Hub
+# AI Training Toolkit
 
-Complete training pipeline for fine-tuning Stable Diffusion 3.5 models with AI-Toolkit, including automated captioning, training, and evaluation with ControlNet.
+Complete training pipeline for fine-tuning diffusion models including FLUX and Stable Diffusion, with automated captioning, training, and evaluation capabilities.
 
 ## Overview
 
-This directory provides a comprehensive solution for training custom LoRA models on Stable Diffusion 3.5:
-- **AI-Toolkit Integration**: Uses the ai-toolkit framework for robust SD3.5 training
+This toolkit provides a comprehensive solution for training custom LoRA models on modern diffusion models:
+- **Multi-Model Support**: FLUX and Stable Diffusion model training
+- **AI-Toolkit Integration**: Uses the ai-toolkit framework for robust training
 - **Automated Captioning**: LLM-based image captioning with OpenAI GPT-4V
 - **YAML Configuration**: Easy-to-modify training configurations
-- **Integrated Evaluation**: Automatic post-training evaluation with ControlNet
-- **Web App Integration**: Direct integration with the SD35WithControlNet web app
+- **Integrated Evaluation**: Automatic post-training evaluation and comparison
+- **FLUX Pipeline**: Native support for FLUX model generation via diffusers
 
 ## Directory Structure
 
 ```
-finetuning/
-├── run_experiment.py          # Main training & evaluation script
-├── captioning/                # Image captioning tools
-│   └── llm_caption.py         # OpenAI GPT-4V image captioning
-├── configs/                   # YAML training configurations
-│   └── basic_sd3.yaml         # SD3.5 LoRA training config
-├── datasets/                  # Training data storage
-├── evaluation/                # Evaluation images and captions
-└── outputs/                   # Training outputs and generated images
+ai_training_toolkit/
+├── run_experiment.py              # Main training script
+├── run_training_evaluation.py     # Training evaluation pipeline
+├── run_comparison.py              # Model comparison utilities
+├── dataset_split.py               # Dataset splitting utilities
+├── evaluation_utils.py            # Evaluation helper functions
+├── captioning/                    # Image captioning tools
+│   ├── llm_caption.py             # OpenAI GPT-4V image captioning
+│   ├── llm_utils.py               # LLM utility functions
+│   ├── create_jsonl.py            # JSONL dataset creation
+│   ├── app.py                     # Web interface for captioning
+│   ├── default_system_prompt.txt  # Default captioning prompt
+│   ├── mx_system_prompt.txt       # MX-specific captioning prompt
+│   └── templates/                 # Web interface templates
+│       └── caption_interface.html
+├── configs/                       # YAML training configurations
+│   ├── flux.yaml                  # FLUX model training config
+│   └── canova_v2_flux.yaml        # FLUX fine-tuning config
+├── generation/                    # Image generation pipelines
+│   ├── base.py                    # Base generator interface
+│   └── flux_pipeline.py           # FLUX diffusers implementation
+├── datasets/                      # Training data storage
+├── evaluation/                    # Evaluation images and prompts
+└── output/                        # Training outputs and generated images
 ```
 
 ## Features
 
-### 1. Automated Training Pipeline
+### 1. Multi-Model Training Pipeline
+- **FLUX Support**: Native FLUX model training via diffusers
 - **YAML-based Configuration**: Easy-to-modify training parameters
 - **AI-Toolkit Integration**: Leverages the robust ai-toolkit framework
 - **Automatic Model Detection**: Finds and uses the latest trained model
 - **Post-training Evaluation**: Automatically evaluates trained models
 
-### 2. LLM-based Captioning
+### 2. Advanced Captioning System
 - **OpenAI GPT-4V Integration**: High-quality image descriptions
+- **Web Interface**: User-friendly captioning interface via Flask app
 - **Configurable Prompts**: Custom system prompts via text files
+- **JSONL Export**: Direct dataset creation for training
 - **Batch Processing**: Process entire directories of images
-- **Output Organization**: Organized caption and image storage
 
-### 3. ControlNet Evaluation
-- **Web App Integration**: Uses the same SD35WithControlNet as the main app
-- **Dual ControlNet**: Depth and Canny edge detection
-- **Reference Image Processing**: Uses evaluation images as ControlNet input
-- **Automatic Output Management**: Organized generated image storage
+### 3. FLUX Generation Pipeline
+- **Diffusers Integration**: Native HuggingFace diffusers support
+- **Memory Optimization**: CPU offloading and attention slicing
+- **LoRA Support**: Load and manage LoRA adapters
+- **Flexible Parameters**: Full control over generation settings
 
-### 4. Advanced Training Configuration
-- **Prodigy Optimizer**: State-of-the-art adaptive optimizer
-- **Cosine LR Scheduling**: Smooth learning rate decay
-- **LoRA Fine-tuning**: Efficient parameter-efficient training
-- **Multiple Resolutions**: 512, 768, and 1024px training buckets
+### 4. Evaluation & Comparison Tools
+- **Model Comparison**: Side-by-side evaluation of different models
+- **Training Evaluation**: Automated post-training assessment
+- **Dataset Utilities**: Splitting and preprocessing tools
+- **Comprehensive Metrics**: Quality and performance evaluation
 
 ## Prerequisites
 
