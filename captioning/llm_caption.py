@@ -59,6 +59,7 @@ def main():
             text_path = os.path.join(args.output_folder, name + ".txt")
             try:
                 caption = get_caption(encode_image_to_base64(image_path), system_prompt)
+                print(f"Caption for {filename}: {caption}")
                 # Save caption to .txt file
                 with open(text_path, 'w') as f:
                     f.write(caption.strip())
