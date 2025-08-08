@@ -22,18 +22,25 @@ except ImportError as e:
     FLUX_EVAL = False
 
 # Define image concatenation function
-def concatenate_images_horizontal(img1, img2):
+def concatenate_images_horizontal(*images):
     from PIL import Image
-    total_width = img1.width + img2.width
-    max_height = max(img1.height, img2.height)
+    if not images:
+        return None
+    
+    total_width = sum(img.width for img in images)
+    max_height = max(img.height for img in images)
     concatenated = Image.new('RGB', (total_width, max_height))
-    concatenated.paste(img1, (0, 0))
-    concatenated.paste(img2, (img1.width, 0))
+    
+    x_offset = 0
+    for img in images:
+        concatenated.paste(img, (x_offset, 0))
+        x_offset += img.width
+    
     return concatenated
 
 # Import evaluation utilities
 try:
-    from evaluation_utils import calculate_lpips_similarity, create_all_comparison_grids
+    from evaluation_utils import calculate_lpips_similarity
     EVAL_UTILS = True
     print("Evaluation utils loaded successfully")
 except ImportError as e:
@@ -52,7 +59,7 @@ def clear_gpu_memory():
 def run_flux_lora_comparison(eval_dir, lora_paths, output_dir=None, metrics=['lpips', 'mse'], max_samples=None, 
                             controlnet_type='depth'):
     """
-    Run FLUX LoRA comparison evaluation with GPU memory optimization
+    Run FLUX LoRA comparison evaluation focusing on horizontal comparison and metrics
     
     Args:
         eval_dir: Directory containing reference images and captions
@@ -133,24 +140,30 @@ def run_flux_lora_comparison(eval_dir, lora_paths, output_dir=None, metrics=['lp
         print(f"FLUX model loaded. GPU Memory: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
         
         # Initialize control preprocessing based on type
-        if controlnet_type == 'depth':
+        if controlnet_type == 'depth' or controlnet_type == "union":
             try:
                 from image_gen_aux import DepthPreprocessor
                 print("Initializing depth preprocessor...")
                 control_preprocessor = DepthPreprocessor.from_pretrained("depth-anything/Depth-Anything-V2-Large-hf").to("cuda")
             except ImportError:
                 print("Warning: image_gen_aux not available, using identity preprocessor")
-                control_preprocessor = lambda img, **kwargs: [img]
+                control_preprocessor = lambda img: [img]
         elif controlnet_type == 'canny':
             import cv2
             control_preprocessor = lambda img: Image.fromarray(cv2.Canny(np.array(img), 100, 200))
         else:
             control_preprocessor = None
         
-        # Store results for all LoRAs
+        # Store results for all LoRAs and generated images
         all_results = {}
+        generated_images = {}  # filename -> {'reference': path, lora_name: generated_path}
         
-        # Process each LoRA model sequentially
+        # Initialize storage for all images
+        for caption_file, image_file in caption_files:
+            base_name = os.path.splitext(os.path.basename(caption_file))[0]
+            generated_images[base_name] = {'reference': image_file}
+        
+        # Process each LoRA and generate all images with it (much more efficient!)
         for lora_idx, lora_path in enumerate(lora_paths):
             if not os.path.exists(lora_path):
                 print(f"Warning: LoRA file not found: {lora_path}")
@@ -159,24 +172,15 @@ def run_flux_lora_comparison(eval_dir, lora_paths, output_dir=None, metrics=['lp
             lora_name = os.path.splitext(os.path.basename(lora_path))[0]
             print(f"\n--- Processing LoRA {lora_idx + 1}/{len(lora_paths)}: {lora_name} ---")
             
-            # Create LoRA-specific output directory
-            lora_output_dir = os.path.join(output_dir, lora_name)
-            os.makedirs(lora_output_dir, exist_ok=True)
-            
-            # Load current LoRA into FLUX pipeline
+            # Load LoRA once for all images
             print(f"Loading LoRA: {lora_name}")
             generator.load_lora_weights(lora_path, adapter_name="current_lora")
             generator.set_lora_scale(1.0)
+            print(f"LoRA loaded. GPU Memory: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
             
-            print(f"LoRA loaded: {lora_name}")
-            print(f"GPU Memory allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
-            
-            # Store paths for evaluation (with filenames as keys)
-            image_results = {}  # filename -> {'reference': path, 'generated': path}
-            
-            # Process each caption+image pair for this LoRA
+            # Process all images with this LoRA
             for pair_idx, (caption_file, image_file) in enumerate(caption_files):
-                print(f"Processing pair {pair_idx + 1}/{len(caption_files)}")
+                print(f"  Processing image {pair_idx + 1}/{len(caption_files)}")
                 
                 try:
                     # Read caption
@@ -184,154 +188,188 @@ def run_flux_lora_comparison(eval_dir, lora_paths, output_dir=None, metrics=['lp
                         prompt = f.read().strip()
                     
                     if not prompt:
-                        print(f"Skipping empty caption file: {caption_file}")
+                        print(f"    Skipping empty caption file: {caption_file}")
                         continue
                     
                     base_name = os.path.splitext(os.path.basename(caption_file))[0]
-                    output_path = os.path.join(lora_output_dir, f"{base_name}_generated.png")
-                    compare_path = os.path.join(lora_output_dir, f"{base_name}_comparison.png")
-                    
-                    print(f"Generating image for: {base_name}")
+                    print(f"    Generating: {base_name}")
                     
                     # Load and process reference image
                     reference_image = Image.open(image_file).resize((1024, 1024)).convert("RGB")
                     
                     # Process control image based on control type
                     if controlnet_type == 'depth' or controlnet_type == 'union' and control_preprocessor:
-                        control_image = control_preprocessor(reference_image, invert=True)[0].convert("RGB")
+                        control_image = control_preprocessor(reference_image)[0].convert("RGB")
                     elif controlnet_type == 'canny' and control_preprocessor:
                         control_image = control_preprocessor(reference_image).convert("RGB")
                     else:
                         control_image = reference_image  # Fallback
                     control_scale = 0.8
+
+                    # Generate image
+                    if controlnet_type != "union":
+                        generated_image = generator.generate_image(
+                            prompt=prompt,
+                            control_image=control_image,
+                            controlnet_conditioning_scale=control_scale,
+                            num_inference_steps=50,
+                            guidance_scale=3.5,
+                            width=1024,
+                            height=1024,
+                            seed=42  # For reproducibility
+                        )
+                    else:
+                        generated_image = generator.generate_image(
+                            prompt=prompt,
+                            control_image=control_image,
+                            controlnet_conditioning_scale=control_scale,
+                            control_mode=2,
+                            num_inference_steps=50,
+                            guidance_scale=3.5,
+                            width=1024,
+                            height=1024,
+                            seed=42  # For reproducibility
+                        )
                     
-                    # Generate image using FLUX ControlNet
-                    generated_image = generator.generate_image(
-                        prompt=prompt,
-                        control_image=control_image,
-                        controlnet_conditioning_scale=control_scale,
-                        num_inference_steps=50,
-                        guidance_scale=3.5,
-                        width=1024,
-                        height=1024,
-                        seed=42  # For reproducibility
-                    )
-                    
-                    # Save generated image
+                    # Resize and save generated image
                     generated_image = generated_image.resize((1024, 1024)).convert("RGB")
+                    output_path = os.path.join(output_dir, f"{base_name}_{lora_name}.png")
                     generated_image.save(output_path)
+                    generated_images[base_name][lora_name] = output_path
                     
-                    # Create comparison image
-                    comparison_image = concatenate_images_horizontal(reference_image, generated_image)
-                    comparison_image.save(compare_path)
-                    
-                    # Store for evaluation using base filename as key
-                    image_results[base_name] = {
-                        'reference': image_file,
-                        'generated': output_path
-                    }
-                    
-                    print(f"Saved: {output_path}")
+                    print(f"    Saved: {output_path}")
                     
                     # Clear intermediate tensors
-                    del control_image, generated_image, comparison_image
+                    del control_image, generated_image
                     clear_gpu_memory()
                     
                 except Exception as e:
-                    print(f"Error processing {caption_file}: {e}")
+                    print(f"    Error processing {caption_file}: {e}")
                     continue
             
-            # Evaluate this LoRA's performance
-            if image_results:
-                print(f"\nEvaluating LoRA: {lora_name}")
-                try:
-                    # Create filename-based metrics
-                    filename_metrics = {}
-                    summary_metrics = {f'{metric}_mean': [] for metric in metrics}
-                    summary_metrics.update({f'{metric}_std': [] for metric in metrics})
-                    
-                    # Calculate metrics for each image pair
-                    for filename, paths in image_results.items():
-                        filename_metrics[filename] = {}
+            # Unload LoRA once after processing all images
+            print(f"Unloading LoRA: {lora_name}")
+            generator.unload_lora_weights()
+            print(f"GPU Memory after LoRA cleanup: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
+        
+        # Calculate metrics first for all LoRA comparisons
+        print(f"\n=== CALCULATING METRICS FOR HORIZONTAL COMPARISONS ===")
+        lora_names = [os.path.splitext(os.path.basename(lora_path))[0] for lora_path in lora_paths if os.path.exists(lora_path)]
+        
+        # Calculate metrics for each image and LoRA combination
+        image_metrics = {}  # base_name -> {lora_name: {metric: score}}
+        
+        for base_name, image_paths in generated_images.items():
+            if len(image_paths) > 1:  # Has reference + at least one generated image
+                print(f"Calculating metrics for: {base_name}")
+                image_metrics[base_name] = {}
+                
+                for lora_name in lora_names:
+                    if lora_name in image_paths:
+                        image_metrics[base_name][lora_name] = {}
                         
+                        # Calculate each metric
                         for metric in metrics:
-                            if metric == 'lpips':
-                                score = calculate_lpips_similarity(paths['reference'], paths['generated'])
-                            elif metric == 'mse':
-                                from evaluation_utils import calculate_mse
-                                score = calculate_mse(paths['reference'], paths['generated'])
-                            elif metric == 'ssim':
-                                from evaluation_utils import calculate_ssim
-                                score = calculate_ssim(paths['reference'], paths['generated'])
-                            else:
-                                score = 0.0
-                            
-                            filename_metrics[filename][metric] = score
+                            try:
+                                if metric == 'lpips':
+                                    score = calculate_lpips_similarity(image_paths['reference'], image_paths[lora_name])
+                                elif metric == 'mse':
+                                    from evaluation_utils import calculate_mse
+                                    score = calculate_mse(image_paths['reference'], image_paths[lora_name])
+                                elif metric == 'ssim':
+                                    from evaluation_utils import calculate_ssim
+                                    score = calculate_ssim(image_paths['reference'], image_paths[lora_name])
+                                else:
+                                    score = 0.0
+                                
+                                image_metrics[base_name][lora_name][metric] = score
+                            except Exception as e:
+                                print(f"    Error calculating {metric} for {lora_name}: {e}")
+                                image_metrics[base_name][lora_name][metric] = float('nan')
+
+        # Create horizontal comparisons with metric scores
+        print(f"\n=== CREATING HORIZONTAL COMPARISONS WITH SCORES ===")
+        
+        for base_name, image_paths in generated_images.items():
+            if len(image_paths) > 1:  # Has reference + at least one generated image
+                try:
+                    print(f"Creating comparison for: {base_name}")
                     
-                    # Calculate summary statistics
-                    for metric in metrics:
-                        scores = [filename_metrics[fname][metric] for fname in filename_metrics.keys()]
-                        summary_metrics[f'{metric}_mean'] = np.mean(scores)
-                        summary_metrics[f'{metric}_std'] = np.std(scores)
+                    # Prepare data for comparison grid function
+                    generated_image_paths = []
+                    valid_lora_names = []
                     
-                    all_results[lora_name] = {
-                        'filename_metrics': filename_metrics,
-                        'summary': summary_metrics
-                    }
+                    # Get generated images in LoRA order
+                    for lora_name in lora_names:
+                        if lora_name in image_paths:
+                            generated_image_paths.append(image_paths[lora_name])
+                            valid_lora_names.append(lora_name)
                     
-                    # Print summary for this LoRA
-                    print(f"Results for {lora_name}:")
-                    for metric, value in summary_metrics.items():
-                        print(f"  {metric}: {value:.4f}")
+                    if generated_image_paths:
+                        # Prepare metrics data in the format expected by create_comparison_grid
+                        metrics_data = {}
+                        for metric in metrics:
+                            metric_scores = []
+                            for lora_name in valid_lora_names:
+                                if (base_name in image_metrics and 
+                                    lora_name in image_metrics[base_name] and
+                                    metric in image_metrics[base_name][lora_name]):
+                                    score = image_metrics[base_name][lora_name][metric]
+                                    metric_scores.append(score if not np.isnan(score) else 0.0)
+                                else:
+                                    metric_scores.append(0.0)
+                            metrics_data[metric] = metric_scores
+                        
+                        # Import and use the comparison grid function
+                        from evaluation_utils import create_comparison_grid
+                        comparison_path = os.path.join(output_dir, f"{base_name}_horizontal_comparison.png")
+                        
+                        create_comparison_grid(
+                            reference_image=image_paths['reference'],
+                            generated_images=generated_image_paths,
+                            lora_names=valid_lora_names,
+                            metrics_data=metrics_data,
+                            output_path=comparison_path,
+                            image_size=(512, 512),
+                            text_height=100
+                        )
+                        
+                        print(f"  Saved comparison with scores: {comparison_path}")
                         
                 except Exception as e:
-                    print(f"Error evaluating LoRA {lora_name}: {e}")
-            
-            # Create vertical concatenation for this LoRA
-            print(f"Creating vertical concatenation for {lora_name}...")
-            comparison_files = []
-            for root, _, files in os.walk(lora_output_dir):
-                for file in files:
-                    if file.endswith('_comparison.png'):
-                        comparison_files.append(os.path.join(root, file))
-            
-            if comparison_files:
-                comparison_files.sort()
-                comparison_images = []
+                    print(f"Error creating horizontal comparison for {base_name}: {e}")
+                    continue
+        
+        # Organize metrics into results structure for JSON output
+        print(f"\n=== ORGANIZING FINAL RESULTS ===")
+        
+        # Initialize results structure for each LoRA
+        for lora_name in lora_names:
+            all_results[lora_name] = {
+                'filename_metrics': {},
+                'summary': {f'{metric}_mean': [] for metric in metrics}
+            }
+            all_results[lora_name]['summary'].update({f'{metric}_std': [] for metric in metrics})
+        
+        # Transfer calculated metrics to results structure
+        for base_name, lora_metrics in image_metrics.items():
+            for lora_name, metric_scores in lora_metrics.items():
+                all_results[lora_name]['filename_metrics'][base_name] = metric_scores
+        
+        # Calculate summary statistics for each LoRA
+        for lora_name in lora_names:
+            for metric in metrics:
+                scores = []
+                for filename_data in all_results[lora_name]['filename_metrics'].values():
+                    if metric in filename_data and not np.isnan(filename_data[metric]):
+                        scores.append(filename_data[metric])
                 
-                for comp_file in comparison_files:
-                    try:
-                        img = Image.open(comp_file)
-                        comparison_images.append(img)
-                    except Exception as e:
-                        print(f"Error loading comparison image {comp_file}: {e}")
-                
-                if comparison_images:
-                    # Calculate total height and max width
-                    total_height = sum(img.height for img in comparison_images)
-                    max_width = max(img.width for img in comparison_images)
-                    
-                    # Create new image with total height
-                    concatenated = Image.new('RGB', (max_width, total_height))
-                    
-                    # Paste images vertically
-                    y_offset = 0
-                    for img in comparison_images:
-                        concatenated.paste(img, (0, y_offset))
-                        y_offset += img.height
-                    
-                    # Save concatenated image
-                    concat_path = os.path.join(lora_output_dir, f"{lora_name}_all_comparisons.png")
-                    concatenated.save(concat_path)
-                    print(f"Vertical concatenation saved to: {concat_path}")
-                    
-                    # Clean up concatenation images
-                    del comparison_images, concatenated
-            
-            # Clear LoRA memory at end of loop iteration  
-            print(f"Finished processing {lora_name}. Clearing LoRA memory...")
-            generator.unload_lora_weights()
-            print(f"GPU Memory after cleanup: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
+                if scores:
+                    all_results[lora_name]['summary'][f'{metric}_mean'] = np.mean(scores)
+                    all_results[lora_name]['summary'][f'{metric}_std'] = np.std(scores)
+                else:
+                    all_results[lora_name]['summary'][f'{metric}_mean'] = float('nan')
+                    all_results[lora_name]['summary'][f'{metric}_std'] = float('nan')
         
         # Clean up control preprocessor
         if control_preprocessor and hasattr(control_preprocessor, 'to'):
@@ -361,14 +399,7 @@ def run_flux_lora_comparison(eval_dir, lora_paths, output_dir=None, metrics=['lp
         
         print(f"\nDetailed results saved to: {results_file}")
         print(f"All outputs saved to: {output_dir}")
-        
-        # Create comparison grids for each input image
-        print("\n=== CREATING COMPARISON GRIDS ===")
-        try:
-            create_all_comparison_grids(eval_dir, all_results, output_dir, metrics)
-            print("Comparison grids created successfully!")
-        except Exception as e:
-            print(f"Error creating comparison grids: {e}")
+        print(f"Horizontal comparison images saved with '_horizontal_comparison.png' suffix")
         
         return True
         

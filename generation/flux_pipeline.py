@@ -149,7 +149,7 @@ class FluxControlNetGenerators:
         """Create a FLUX generator with Canny ControlNet."""
         return FluxGenerator(
             model_id=model_id,
-            controlnet_model_id="InstantX/FLUX.1-dev-controlnet-canny"
+            controlnet_model_id="InstantX/FLUX.1-dev-Controlnet-Canny"
         )
     
     @staticmethod
@@ -157,7 +157,7 @@ class FluxControlNetGenerators:
         """Create a FLUX generator with Depth ControlNet."""
         return FluxGenerator(
             model_id=model_id,
-            controlnet_model_id="InstantX/FLUX.1-dev-controlnet-depth"
+            controlnet_model_id="Shakker-Labs/FLUX.1-dev-ControlNet-Depth"
         )
     
     @staticmethod
@@ -165,7 +165,7 @@ class FluxControlNetGenerators:
         """Create a FLUX generator with Union ControlNet (multi-control)."""
         return FluxGenerator(
             model_id=model_id,
-            controlnet_model_id="InstantX/FLUX.1-dev-controlnet-union"
+            controlnet_model_id="InstantX/FLUX.1-dev-Controlnet-Union"
         )
     
     @staticmethod
