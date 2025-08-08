@@ -27,7 +27,8 @@ def main():
     parser.add_argument("--input_folder", type=str, help="Path to the input folder containing images (overrides config)")
     parser.add_argument("--output_folder", type=str, help="Path to the output folder for captioned images (overrides config)")
     parser.add_argument("--system_prompt_file", type=str, help="Path to text file containing system prompt (overrides config)")
-    
+    parser.add_argument("--trigger_word", type=str,  help="The trigger word to prepend to captions", default="TRGGR_WORD")
+
     args = parser.parse_args()
 
     # Override with command line arguments if provided
@@ -59,6 +60,7 @@ def main():
             text_path = os.path.join(args.output_folder, name + ".txt")
             try:
                 caption = get_caption(encode_image_to_base64(image_path), system_prompt)
+                caption = f"{args.trigger_word}, {caption}"
                 print(f"Caption for {filename}: {caption}")
                 # Save caption to .txt file
                 with open(text_path, 'w') as f:
@@ -79,8 +81,6 @@ def main():
             text_path = os.path.join(args.output_folder, name + ".txt")
             with open(text_path, "r") as file:
                 caption = file.read()
-                caption.replace("LGTCH_MOUSE","")
-                caption = f"LGTCH_MX, {caption}"
             entry = {"file_name":f"{name}{ext}", "prompt": caption}
             json.dump(entry, outfile)
             outfile.write('\n')
