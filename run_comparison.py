@@ -12,15 +12,24 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, current_dir)
 sys.path.insert(0, os.path.join(current_dir, '..'))
 
-# Try to import web app generation
+# Import FLUX generation
 try:
-    sys.path.insert(0, os.path.join(current_dir, '..', 'web_app'))
-    from generation import SD35WithControlNet, concatenate_images_horizontal
-    SD_EVAL = True
-    print("SD35WithControlNet loaded successfully")
+    from generation.flux_pipeline import FluxControlNetGenerators
+    FLUX_EVAL = True
+    print("FLUX generators loaded successfully")
 except ImportError as e:
-    print(f"Warning: SD35WithControlNet not available: {e}")
-    SD_EVAL = False
+    print(f"Error: FLUX generators not available: {e}")
+    FLUX_EVAL = False
+
+# Define image concatenation function
+def concatenate_images_horizontal(img1, img2):
+    from PIL import Image
+    total_width = img1.width + img2.width
+    max_height = max(img1.height, img2.height)
+    concatenated = Image.new('RGB', (total_width, max_height))
+    concatenated.paste(img1, (0, 0))
+    concatenated.paste(img2, (img1.width, 0))
+    return concatenated
 
 # Import evaluation utilities
 try:
@@ -40,18 +49,20 @@ def clear_gpu_memory():
     gc.collect()
 
 
-def run_lora_comparison(eval_dir, lora_paths, output_dir=None, metrics=['lpips', 'mse'], max_samples=None):
+def run_flux_lora_comparison(eval_dir, lora_paths, output_dir=None, metrics=['lpips', 'mse'], max_samples=None, 
+                            controlnet_type='depth'):
     """
-    Run comparison evaluation across multiple LoRA models with GPU memory optimization
+    Run FLUX LoRA comparison evaluation with GPU memory optimization
     
     Args:
         eval_dir: Directory containing reference images and captions
         lora_paths: List of paths to LoRA model files
         output_dir: Output directory for results
         metrics: List of metrics to calculate
+        controlnet_type: Type of ControlNet ('depth', 'canny', 'union', 'upscaler')
     """
-    if not SD_EVAL:
-        print("Error: SD35WithControlNet not available")
+    if not FLUX_EVAL:
+        print("Error: FLUX generators not available")
         return False
         
     if not EVAL_UTILS:
@@ -64,7 +75,7 @@ def run_lora_comparison(eval_dir, lora_paths, output_dir=None, metrics=['lpips',
     
     # Create output directory
     if output_dir is None:
-        output_dir = os.path.join(eval_dir, "lora_comparison")
+        output_dir = os.path.join(eval_dir, "flux_lora_comparison")
     os.makedirs(output_dir, exist_ok=True)
     
     # Find all caption files with matching images
@@ -97,26 +108,44 @@ def run_lora_comparison(eval_dir, lora_paths, output_dir=None, metrics=['lpips',
         print(f"Limited to {max_samples} samples (out of {len(caption_files)} total)")
     
     print(f"Found {len(caption_files)} caption+image pairs")
-    print(f"Testing {len(lora_paths)} LoRA models")
+    print(f"Testing {len(lora_paths)} LoRA models with FLUX + {controlnet_type} ControlNet")
     
-    # Initialize components once
+    # Initialize FLUX components
     try:
-        from image_gen_aux import DepthPreprocessor
         from PIL import Image
         
-        print("Initializing depth preprocessor...")
-        depth_preprocessor = DepthPreprocessor.from_pretrained("depth-anything/Depth-Anything-V2-Large-hf").to("cuda")
+        print(f"Initializing FLUX generator with {controlnet_type} ControlNet...")
         
-        # Initialize base generator once (without LoRAs)
-        print("Loading base SD3.5 model with ControlNet...")
-        generator = SD35WithControlNet(
-            controlnet_path=[
-                "stabilityai/stable-diffusion-3.5-large-controlnet-depth"
-            ],
-            lora_path=None  # No LoRAs initially
-        )
+        # Create FLUX generator with appropriate ControlNet
+        if controlnet_type == 'depth':
+            generator = FluxControlNetGenerators.depth()
+        elif controlnet_type == 'canny':
+            generator = FluxControlNetGenerators.canny()
+        elif controlnet_type == 'union':
+            generator = FluxControlNetGenerators.union()
+        elif controlnet_type == 'upscaler':
+            generator = FluxControlNetGenerators.upscaler()
+        else:
+            print(f"Unknown ControlNet type: {controlnet_type}, using depth")
+            generator = FluxControlNetGenerators.depth()
+        
         generator.load_pipeline()
-        print(f"Base model loaded. GPU Memory: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
+        print(f"FLUX model loaded. GPU Memory: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
+        
+        # Initialize control preprocessing based on type
+        if controlnet_type == 'depth':
+            try:
+                from image_gen_aux import DepthPreprocessor
+                print("Initializing depth preprocessor...")
+                control_preprocessor = DepthPreprocessor.from_pretrained("depth-anything/Depth-Anything-V2-Large-hf").to("cuda")
+            except ImportError:
+                print("Warning: image_gen_aux not available, using identity preprocessor")
+                control_preprocessor = lambda img, **kwargs: [img]
+        elif controlnet_type == 'canny':
+            import cv2
+            control_preprocessor = lambda img: Image.fromarray(cv2.Canny(np.array(img), 100, 200))
+        else:
+            control_preprocessor = None
         
         # Store results for all LoRAs
         all_results = {}
@@ -134,10 +163,10 @@ def run_lora_comparison(eval_dir, lora_paths, output_dir=None, metrics=['lpips',
             lora_output_dir = os.path.join(output_dir, lora_name)
             os.makedirs(lora_output_dir, exist_ok=True)
             
-            # Load current LoRA into existing pipeline
+            # Load current LoRA into FLUX pipeline
             print(f"Loading LoRA: {lora_name}")
-            generator.pipeline.load_lora_weights(lora_path, adapter_name="current_lora")
-            generator.pipeline.set_adapters("current_lora", adapter_weights=[1.0])
+            generator.load_lora_weights(lora_path, adapter_name="current_lora")
+            generator.set_lora_scale(1.0)
             
             print(f"LoRA loaded: {lora_name}")
             print(f"GPU Memory allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
@@ -167,21 +196,25 @@ def run_lora_comparison(eval_dir, lora_paths, output_dir=None, metrics=['lpips',
                     # Load and process reference image
                     reference_image = Image.open(image_file).resize((1024, 1024)).convert("RGB")
                     
-                    # Process control images
-                    depth_image = depth_preprocessor(reference_image, invert=True)[0].convert("RGB")
-                    control_images = [depth_image]
-                    control_scales = [0.8]
+                    # Process control image based on control type
+                    if controlnet_type == 'depth' or controlnet_type == 'union' and control_preprocessor:
+                        control_image = control_preprocessor(reference_image, invert=True)[0].convert("RGB")
+                    elif controlnet_type == 'canny' and control_preprocessor:
+                        control_image = control_preprocessor(reference_image).convert("RGB")
+                    else:
+                        control_image = reference_image  # Fallback
+                    control_scale = 0.8
                     
-                    # Generate image using ControlNet
+                    # Generate image using FLUX ControlNet
                     generated_image = generator.generate_image(
                         prompt=prompt,
-                        control_image=control_images,
-                        controlnet_conditioning_scale=control_scales,
-                        negative_prompt="Poor quality, weird render, weird pens, misshapen props",
-                        num_inference_steps=40,
-                        guidance_scale=4.0,
+                        control_image=control_image,
+                        controlnet_conditioning_scale=control_scale,
+                        num_inference_steps=50,
+                        guidance_scale=3.5,
                         width=1024,
-                        height=1024
+                        height=1024,
+                        seed=42  # For reproducibility
                     )
                     
                     # Save generated image
@@ -201,7 +234,7 @@ def run_lora_comparison(eval_dir, lora_paths, output_dir=None, metrics=['lpips',
                     print(f"Saved: {output_path}")
                     
                     # Clear intermediate tensors
-                    del depth_image, control_images, generated_image, comparison_image
+                    del control_image, generated_image, comparison_image
                     clear_gpu_memory()
                     
                 except Exception as e:
@@ -297,11 +330,12 @@ def run_lora_comparison(eval_dir, lora_paths, output_dir=None, metrics=['lpips',
             
             # Clear LoRA memory at end of loop iteration  
             print(f"Finished processing {lora_name}. Clearing LoRA memory...")
-            generator.clear_lora_memory()
+            generator.unload_lora_weights()
             print(f"GPU Memory after cleanup: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
         
-        # Clean up depth preprocessor
-        del depth_preprocessor
+        # Clean up control preprocessor
+        if control_preprocessor and hasattr(control_preprocessor, 'to'):
+            del control_preprocessor
         clear_gpu_memory()
         
         # Save overall comparison results
@@ -344,13 +378,15 @@ def run_lora_comparison(eval_dir, lora_paths, output_dir=None, metrics=['lpips',
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Compare multiple LoRA models on evaluation dataset (GPU optimized)")
+    parser = argparse.ArgumentParser(description="Compare multiple FLUX LoRA models on evaluation dataset (GPU optimized)")
     parser.add_argument("--eval_dir", type=str, required=True, help="Directory with images and captions for evaluation")
     parser.add_argument("--lora_dir", type=str, required=True, help="Directory containing LoRA model files (.safetensors)")
     parser.add_argument("--output_dir", type=str, help="Custom output directory for comparison results")
     parser.add_argument("--metrics", type=str, nargs='+', default=['lpips', 'mse'], 
                        help="Metrics to calculate (lpips, mse, ssim)")
     parser.add_argument("--max_samples", type=int, help="Maximum number of evaluation samples to process (default: all)")
+    parser.add_argument("--controlnet_type", type=str, choices=['depth', 'canny', 'union', 'upscaler'], 
+                       default='depth', help="ControlNet type for FLUX models")
     
     args = parser.parse_args()
     
@@ -390,7 +426,8 @@ def main():
     for lora in lora_files:
         print(f"  - {os.path.basename(lora)}")
     
-    success = run_lora_comparison(args.eval_dir, lora_files, args.output_dir, args.metrics, args.max_samples)
+    success = run_flux_lora_comparison(args.eval_dir, lora_files, args.output_dir, args.metrics, args.max_samples,
+                                      args.controlnet_type)
     if success:
         print("\nComparison completed successfully!")
     else:

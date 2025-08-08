@@ -1,4 +1,4 @@
-# Stable Diffusion 3.5 Training Configuration
+# Flux Training Configuration
 job: extension
 config:
   # This name will be the folder and filename name
@@ -22,7 +22,7 @@ config:
       save:
         dtype: float16  # precision to save
         save_every: 250  # save every this many steps
-        max_step_saves_to_keep: 4  # how many intermittent saves to keep
+        max_step_saves_to_keep: 10  # how many intermittent saves to keep
       
       datasets:
         # Datasets are a folder of images. captions need to be txt files with the same name as the image
