@@ -27,17 +27,13 @@ def main():
     parser.add_argument("--input_folder", type=str, help="Path to the input folder containing images (overrides config)")
     parser.add_argument("--output_folder", type=str, help="Path to the output folder for captioned images (overrides config)")
     parser.add_argument("--system_prompt_file", type=str, help="Path to text file containing system prompt (overrides config)")
-    parser.add_argument("--trigger_word", type=str,  help="The trigger word to prepend to captions", default="TRGGR_WORD")
+    parser.add_argument("--trigger_word", type=str,  help="The trigger word to prepend/replace in captions. Use empty string '' to skip trigger word", default="TRGGR_WORD")
     parser.add_argument("--trigger_word_type", type=str, choices=["prepend", "replace"], default="prepend",
                         help="How to apply the trigger word: 'prepend' adds it to the start, 'replace' replaces a word in the caption")
     parser.add_argument("--replace_word", type=str, help="Word to replace when using trigger_word_type='replace'")
     parser.add_argument("--model", type=str, default="gpt-4o", help="OpenAI model to use for captioning (e.g., gpt-4o, gpt-4-turbo, gpt-4o-mini)")
 
     args = parser.parse_args()
-
-    # Validate arguments
-    if args.trigger_word_type == "replace" and not args.replace_word:
-        parser.error("--replace_word is required when using --trigger_word_type=replace")
 
     # Override with command line arguments if provided
     input_folder = args.input_folder
@@ -69,12 +65,16 @@ def main():
             try:
                 caption = get_caption(encode_image_to_base64(image_path), system_prompt, args.model)
 
-                # Apply trigger word based on the selected mode
-                if args.trigger_word_type == "prepend":
-                    caption = f"{args.trigger_word}, {caption}"
-                elif args.trigger_word_type == "replace":
-                    # Replace all occurrences of the replace_word with the trigger_word
-                    caption = caption.replace(args.replace_word, args.trigger_word)
+                # Apply trigger word based on the selected mode (only if trigger_word is not empty)
+                if args.trigger_word:
+                    if args.trigger_word_type == "prepend":
+                        caption = f"{args.trigger_word}, {caption}"
+                    elif args.trigger_word_type == "replace":
+                        # Validate arguments
+                        if not args.replace_word:
+                            parser.error("--replace_word is required when using --trigger_word_type=replace")
+                        # Replace all occurrences of the replace_word with the trigger_word
+                        caption = caption.replace(args.replace_word, args.trigger_word)
 
                 print(f"Caption for {filename}: {caption}")
                 # Save caption to .txt file
