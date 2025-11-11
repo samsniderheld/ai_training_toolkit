@@ -53,10 +53,10 @@ def encode_image_to_base64(image_path):
         return base64.b64encode(image_file.read()).decode("utf-8")
 
 
-def get_caption(base64_image, system_prompt):
+def get_caption(base64_image, system_prompt, model="gpt-4o"):
     """Generate caption using OpenAI GPT-4V"""
     response = openai.chat.completions.create(
-        model="gpt-4o",  # or "gpt-4-turbo", depending on your plan
+        model=model,
         messages=[
             {
                 "role": "system",
@@ -79,7 +79,7 @@ def get_caption(base64_image, system_prompt):
             },
             
         ],
-        max_tokens=70,
+
     )
     return response.choices[0].message.content.strip()
 

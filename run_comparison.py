@@ -418,6 +418,8 @@ def main():
     parser.add_argument("--max_samples", type=int, help="Maximum number of evaluation samples to process (default: all)")
     parser.add_argument("--controlnet_type", type=str, choices=['depth', 'canny', 'union', 'upscaler'], 
                        default='depth', help="ControlNet type for FLUX models")
+    parser.add_argument("--checkpoints", type=str, nargs='+', 
+                       help="Specific checkpoint filenames to compare (without .safetensors extension). If not specified, all checkpoints in lora_dir will be used.")
     
     args = parser.parse_args()
     
@@ -439,21 +441,52 @@ def main():
         print(f"Error: LoRA directory does not exist: {args.lora_dir}")
         return
     
-    # Find all .safetensors files in the LoRA directory
+    # Find LoRA files based on checkpoints argument
     lora_files = []
-    for file in os.listdir(args.lora_dir):
-        if file.endswith('.safetensors'):
-            lora_path = os.path.join(args.lora_dir, file)
-            lora_files.append(lora_path)
+    
+    if args.checkpoints:
+        # Use specific checkpoints
+        print(f"Using specific checkpoints: {args.checkpoints}")
+        
+        for checkpoint_name in args.checkpoints:
+            # Add .safetensors extension if not present
+            if not checkpoint_name.endswith('.safetensors'):
+                checkpoint_file = checkpoint_name + '.safetensors'
+            else:
+                checkpoint_file = checkpoint_name
+            
+            lora_path = os.path.join(args.lora_dir, checkpoint_file)
+            
+            if os.path.exists(lora_path):
+                lora_files.append(lora_path)
+                print(f"  ✓ Found: {checkpoint_file}")
+            else:
+                print(f"  ✗ Not found: {checkpoint_file}")
+                print(f"    Searched in: {args.lora_dir}")
+    else:
+        # Find all .safetensors files in the LoRA directory
+        print(f"Searching for all .safetensors files in: {args.lora_dir}")
+        
+        for file in os.listdir(args.lora_dir):
+            if file.endswith('.safetensors'):
+                lora_path = os.path.join(args.lora_dir, file)
+                lora_files.append(lora_path)
     
     if not lora_files:
-        print(f"Error: No .safetensors files found in {args.lora_dir}")
+        if args.checkpoints:
+            print(f"Error: None of the specified checkpoints were found in {args.lora_dir}")
+            print("Available files:")
+            for file in os.listdir(args.lora_dir):
+                if file.endswith('.safetensors'):
+                    print(f"  - {file}")
+        else:
+            print(f"Error: No .safetensors files found in {args.lora_dir}")
         return
     
     # Sort LoRA files for consistent ordering
     lora_files.sort()
     
-    print(f"Found {len(lora_files)} LoRA models in {args.lora_dir}:")
+    print(f"\nUsing {len(lora_files)} LoRA model(s):")
     for lora in lora_files:
         print(f"  - {os.path.basename(lora)}")
     
