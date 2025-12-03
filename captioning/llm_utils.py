@@ -6,6 +6,14 @@ import base64
 import os
 import openai
 
+# Try to import Gemini SDK
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    genai = None
+
 
 def load_system_prompt(prompt_file_path=None):
     """Load system prompt from a text file or use default"""
@@ -53,7 +61,7 @@ def encode_image_to_base64(image_path):
         return base64.b64encode(image_file.read()).decode("utf-8")
 
 
-def get_caption(base64_image, system_prompt, model="gpt-4o"):
+def get_caption_openai(base64_image, system_prompt, model="gpt-4o"):
     """Generate caption using OpenAI GPT-4V"""
     response = openai.chat.completions.create(
         model=model,
@@ -77,11 +85,60 @@ def get_caption(base64_image, system_prompt, model="gpt-4o"):
                     },
                 ],
             },
-            
+
         ],
 
     )
     return response.choices[0].message.content.strip()
+
+
+def get_caption_gemini(image_path, system_prompt, model="gemini-1.5-flash"):
+    """Generate caption using Google Gemini"""
+    if not GEMINI_AVAILABLE:
+        raise ImportError("Google Generative AI package not installed. Install with: pip install google-generativeai")
+
+    # Configure Gemini with API key from environment
+    api_key = os.getenv('GOOGLE_API_KEY') or os.getenv('GEMINI_API_KEY')
+    if not api_key:
+        raise ValueError("GOOGLE_API_KEY or GEMINI_API_KEY environment variable not set")
+
+    genai.configure(api_key=api_key)
+
+    # Initialize the model
+    gemini_model = genai.GenerativeModel(model)
+
+    # Load the image from file
+    from PIL import Image
+    image = Image.open(image_path)
+
+    # Create the prompt with system prompt and user instruction
+    full_prompt = f"{system_prompt}\n\nCreate an image caption for this picture"
+
+    # Generate content
+    response = gemini_model.generate_content([full_prompt, image])
+
+    return response.text.strip()
+
+
+def get_caption(image_input, system_prompt, model="gpt-4o", provider="openai"):
+    """
+    Generate caption using specified LLM provider
+
+    Args:
+        image_input: For OpenAI: base64 encoded image string. For Gemini: image file path
+        system_prompt: System prompt for the LLM
+        model: Model name to use
+        provider: LLM provider ('openai' or 'gemini')
+
+    Returns:
+        Generated caption string
+    """
+    if provider.lower() == "openai":
+        return get_caption_openai(image_input, system_prompt, model)
+    elif provider.lower() == "gemini":
+        return get_caption_gemini(image_input, system_prompt, model)
+    else:
+        raise ValueError(f"Unknown provider: {provider}. Supported providers: 'openai', 'gemini'")
 
 
 def get_image_files(root_dir):

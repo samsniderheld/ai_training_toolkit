@@ -31,9 +31,18 @@ def main():
     parser.add_argument("--trigger_word_type", type=str, choices=["prepend", "replace"], default="prepend",
                         help="How to apply the trigger word: 'prepend' adds it to the start, 'replace' replaces a word in the caption")
     parser.add_argument("--replace_word", type=str, help="Word to replace when using trigger_word_type='replace'")
-    parser.add_argument("--model", type=str, default="gpt-4o", help="OpenAI model to use for captioning (e.g., gpt-4o, gpt-4-turbo, gpt-4o-mini)")
+    parser.add_argument("--provider", type=str, choices=["openai", "gemini"], default="openai",
+                        help="LLM provider to use: 'openai' or 'gemini'")
+    parser.add_argument("--model", type=str, help="Model to use for captioning. Default: gpt-4o for OpenAI, gemini-1.5-flash for Gemini")
 
     args = parser.parse_args()
+
+    # Set default model based on provider if not specified
+    if not args.model:
+        if args.provider == "openai":
+            args.model = "gpt-4o"
+        elif args.provider == "gemini":
+            args.model = "gemini-1.5-flash"
 
     # Override with command line arguments if provided
     input_folder = args.input_folder
@@ -47,6 +56,13 @@ def main():
     else:
         print("Loaded default system prompt from: default_system_prompt.txt")
 
+    # Print configuration
+    print(f"\nConfiguration:")
+    print(f"  Provider: {args.provider}")
+    print(f"  Model: {args.model}")
+    print(f"  Input folder: {input_folder}")
+    print(f"  Output folder: {output_folder}")
+    print()
 
     folder_path = input_folder
     image_files = get_image_files(folder_path)
@@ -54,7 +70,7 @@ def main():
 
     os.makedirs(output_folder, exist_ok=True)
 
- 
+
     for filename in tqdm(image_files, desc="Generating captions", unit="image"):
             image_path = os.path.join(folder_path, filename)
             base = os.path.basename(filename)
@@ -63,7 +79,13 @@ def main():
 
             text_path = os.path.join(args.output_folder, name + ".txt")
             try:
-                caption = get_caption(encode_image_to_base64(image_path), system_prompt, args.model)
+                # For OpenAI: pass base64 encoded image, for Gemini: pass image path
+                if args.provider == "openai":
+                    image_input = encode_image_to_base64(image_path)
+                else:  # gemini
+                    image_input = image_path
+
+                caption = get_caption(image_input, system_prompt, args.model, args.provider)
 
                 # Apply trigger word based on the selected mode (only if trigger_word is not empty)
                 if args.trigger_word:
