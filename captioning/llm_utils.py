@@ -6,9 +6,11 @@ import base64
 import os
 import openai
 
+from PIL import Image
+
 # Try to import Gemini SDK
 try:
-    import google.generativeai as genai
+    from google import genai
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
@@ -92,30 +94,31 @@ def get_caption_openai(base64_image, system_prompt, model="gpt-4o"):
     return response.choices[0].message.content.strip()
 
 
-def get_caption_gemini(image_path, system_prompt, model="gemini-1.5-flash"):
+def get_caption_gemini(image_path, system_prompt, model="gemini-2.0-flash-exp"):
     """Generate caption using Google Gemini"""
     if not GEMINI_AVAILABLE:
-        raise ImportError("Google Generative AI package not installed. Install with: pip install google-generativeai")
+        raise ImportError("Google Generative AI package not installed. Install with: pip install google-genai")
 
-    # Configure Gemini with API key from environment
-    api_key = os.getenv('GOOGLE_API_KEY') or os.getenv('GEMINI_API_KEY')
+    # The client gets the API key from the environment variable `GEMINI_API_KEY`
+    # Also support GOOGLE_API_KEY as fallback
+    api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY')
     if not api_key:
-        raise ValueError("GOOGLE_API_KEY or GEMINI_API_KEY environment variable not set")
+        raise ValueError("GEMINI_API_KEY or GOOGLE_API_KEY environment variable not set")
 
-    genai.configure(api_key=api_key)
-
-    # Initialize the model
-    gemini_model = genai.GenerativeModel(model)
+    # Initialize the Gemini client
+    client = genai.Client(api_key=api_key)
 
     # Load the image from file
-    from PIL import Image
     image = Image.open(image_path)
 
     # Create the prompt with system prompt and user instruction
     full_prompt = f"{system_prompt}\n\nCreate an image caption for this picture"
 
-    # Generate content
-    response = gemini_model.generate_content([full_prompt, image])
+    # Generate content using the new API structure
+    response = client.models.generate_content(
+        model=model,
+        contents=[full_prompt, image]
+    )
 
     return response.text.strip()
 

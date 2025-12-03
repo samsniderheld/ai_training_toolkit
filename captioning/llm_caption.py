@@ -42,7 +42,7 @@ def main():
         if args.provider == "openai":
             args.model = "gpt-4o"
         elif args.provider == "gemini":
-            args.model = "gemini-1.5-flash"
+            args.model = "gemini-2.0-flash-exp"
 
     # Override with command line arguments if provided
     input_folder = args.input_folder
