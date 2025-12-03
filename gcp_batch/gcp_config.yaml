@@ -1,0 +1,78 @@
+# GCP Batch Training Configuration
+# Copy this file and customize for your project
+
+gcp:
+  # GCP Project settings
+  project_id: "your-project-id"  # REQUIRED: Your GCP project ID
+  region: "us-central1"  # Region for Batch jobs
+  zone: "us-central1-a"  # Zone for compute resources
+
+compute:
+  # Machine configuration
+  machine_type: "n1-standard-4"  # 4 vCPUs, 15 GB RAM
+
+  # GPU configuration
+  gpu_type: "nvidia-tesla-t4"  # Options: nvidia-tesla-t4, nvidia-tesla-a100, nvidia-l4
+  gpu_count: 1
+
+  # Disk configuration
+  disk_size_gb: 100  # Boot disk size
+
+  # VM image (Deep Learning VM with GPU drivers pre-installed)
+  image_family: "pytorch-latest-gpu"  # Or: "pytorch-2-0-cu118", "tf-latest-gpu"
+  image_project: "deeplearning-platform-release"
+
+storage:
+  # GCS bucket configuration
+  training_data_bucket: "my-training-data"  # Bucket containing training datasets
+  output_bucket: "my-lora-outputs"  # Bucket for trained models and outputs
+
+  # Optional: organize outputs by prefix
+  output_prefix: "lora-training-runs"  # Creates: gs://bucket/lora-training-runs/job-name/
+
+  # Optional: if using a specific dataset path
+  # dataset_path: "datasets/my-dataset"  # Path within training_data_bucket
+
+training:
+  # Training job settings
+  max_runtime_seconds: 7200  # 2 hours (7200s) - adjust based on your training duration
+  retry_count: 1  # Number of retries on failure
+
+  # AI Toolkit settings
+  ai_toolkit_repo: "https://github.com/ostris/ai-toolkit.git"  # AI Toolkit repository
+  ai_toolkit_branch: "main"  # Branch to use
+
+  # Environment variables to pass to training jobs
+  env_vars:
+    HF_HOME: "/tmp/huggingface"  # Hugging Face cache location
+    TORCH_HOME: "/tmp/torch"  # PyTorch cache location
+
+# Service account for jobs (optional)
+# If not specified, uses default compute service account
+# service_account:
+#   email: "your-service-account@your-project.iam.gserviceaccount.com"
+
+# Monitoring and notifications (optional)
+monitoring:
+  enable_cloud_logging: true  # Stream logs to Cloud Logging
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+
+# Cost management
+cost_control:
+  # Preemptible VMs cost ~70% less but can be interrupted
+  use_preemptible: false  # Set to true for cost savings (not recommended for long training)
+
+  # Maximum number of concurrent jobs to prevent cost overruns
+  max_concurrent_jobs: 5
+
+# Advanced settings
+advanced:
+  # Install additional packages at runtime
+  additional_pip_packages:
+    - "lpips"
+    - "image-gen-aux"
+
+  # Custom startup commands (run before training)
+  # pre_training_commands:
+  #   - "pip install custom-package"
+  #   - "gcloud auth configure-docker"

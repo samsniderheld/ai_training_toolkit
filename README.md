@@ -7,7 +7,8 @@ Complete training pipeline for fine-tuning diffusion models including FLUX and S
 This toolkit provides a comprehensive solution for training custom LoRA models on modern diffusion models:
 - **Multi-Model Support**: FLUX and Stable Diffusion model training
 - **AI-Toolkit Integration**: Uses the ai-toolkit framework for robust training
-- **Automated Captioning**: LLM-based image captioning with OpenAI GPT-4V
+- **Automated Captioning**: LLM-based image captioning with OpenAI GPT-4V and Google Gemini
+- **GCP Batch Training**: Scale training to the cloud with parallel job execution
 - **YAML Configuration**: Easy-to-modify training configurations
 - **Integrated Evaluation**: Automatic post-training evaluation and comparison
 - **FLUX Pipeline**: Native support for FLUX model generation via diffusers
@@ -22,7 +23,7 @@ ai_training_toolkit/
 ├── dataset_split.py               # Dataset splitting utilities
 ├── evaluation_utils.py            # Evaluation helper functions
 ├── captioning/                    # Image captioning tools
-│   ├── llm_caption.py             # OpenAI GPT-4V image captioning
+│   ├── llm_caption.py             # LLM image captioning (OpenAI/Gemini)
 │   ├── llm_utils.py               # LLM utility functions
 │   ├── create_jsonl.py            # JSONL dataset creation
 │   ├── app.py                     # Web interface for captioning
@@ -36,6 +37,16 @@ ai_training_toolkit/
 ├── generation/                    # Image generation pipelines
 │   ├── base.py                    # Base generator interface
 │   └── flux_pipeline.py           # FLUX diffusers implementation
+├── gcp_batch/                     # GCP Batch training integration
+│   ├── __init__.py                # Package initialization
+│   ├── gcp_batch_launcher.py     # Core GCP Batch launcher
+│   ├── launch_batch_training.py  # Launch jobs CLI
+│   ├── check_batch_jobs.py       # Monitor jobs CLI
+│   ├── download_results.py       # Download outputs CLI
+│   ├── setup_gcp.py              # GCP setup automation
+│   ├── gcp_config.yaml           # GCP configuration template
+│   └── README.md                 # Complete GCP setup guide
+├── requirements.txt               # Python dependencies
 ├── datasets/                      # Training data storage
 ├── evaluation/                    # Evaluation images and prompts
 └── output/                        # Training outputs and generated images
@@ -49,21 +60,32 @@ ai_training_toolkit/
 - **AI-Toolkit Integration**: Leverages the robust ai-toolkit framework
 - **Automatic Model Detection**: Finds and uses the latest trained model
 - **Post-training Evaluation**: Automatically evaluates trained models
+- **Batch Configuration Processing**: Run multiple configs sequentially or in parallel
 
-### 2. Advanced Captioning System
-- **OpenAI GPT-4V Integration**: High-quality image descriptions
+### 2. Cloud Training with GCP Batch
+- **Parallel Execution**: Train multiple models simultaneously in the cloud
+- **GPU Auto-Provisioning**: Automatic GPU instance management
+- **Scalable**: Run 5, 10, or 100 training jobs in parallel
+- **Cost-Effective**: Pay only for compute time used
+- **Cloud Storage Integration**: Automatic upload/download via GCS
+- **Job Monitoring**: Track training progress from anywhere
+- **See [gcp_batch/README.md](gcp_batch/README.md) for complete setup instructions**
+
+### 3. Advanced Captioning System
+- **Multi-Provider Support**: OpenAI GPT-4 and Google Gemini
 - **Web Interface**: User-friendly captioning interface via Flask app
 - **Configurable Prompts**: Custom system prompts via text files
 - **JSONL Export**: Direct dataset creation for training
 - **Batch Processing**: Process entire directories of images
+- **Trigger Word Management**: Prepend or replace trigger words automatically
 
-### 3. FLUX Generation Pipeline
+### 4. FLUX Generation Pipeline
 - **Diffusers Integration**: Native HuggingFace diffusers support
 - **Memory Optimization**: CPU offloading and attention slicing
 - **LoRA Support**: Load and manage LoRA adapters
 - **Flexible Parameters**: Full control over generation settings
 
-### 4. Evaluation & Comparison Tools
+### 5. Evaluation & Comparison Tools
 - **Model Comparison**: Side-by-side evaluation of different models
 - **Training Evaluation**: Automated post-training assessment
 - **Dataset Utilities**: Splitting and preprocessing tools
@@ -79,32 +101,73 @@ ai_training_toolkit/
 ### Required Dependencies
 ```bash
 # AI Toolkit (clone to /content/ai-toolkit or set AI_TOOLKIT_PATH)
-git clone https://github.com/ostris/ai-toolkit.git 
+git clone https://github.com/ostris/ai-toolkit.git
 
-# Python dependencies
+# Python dependencies (for local training)
 cd ai-toolkit
-pip -r install requirements.txt
+pip install -r requirements.txt
 
-# Set OpenAI API key
-export OPENAI_API_KEY="your-api-key-here"
+# Install this toolkit's dependencies
+cd ../ai_training_toolkit
+pip install -r requirements.txt
+
+# Set API keys
+export OPENAI_API_KEY="your-api-key-here"        # For OpenAI captioning
+export GEMINI_API_KEY="your-api-key-here"        # For Gemini captioning (optional)
 ```
+
+For GCP Batch training, see [gcp_batch/README.md](gcp_batch/README.md) for additional setup steps.
 
 ## Usage
 
 ### Quick Start
 
+#### Local Training
+
 1. **Prepare your dataset**:
 ```bash
-# Create captioned dataset
+# Create captioned dataset (using OpenAI)
 python captioning/llm_caption.py \
   --input_folder /path/to/images \
   --output_folder datasets/my_dataset
+
+# Or use Google Gemini
+python captioning/llm_caption.py \
+  --input_folder /path/to/images \
+  --output_folder datasets/my_dataset \
+  --provider gemini
 ```
 
-2. **Run complete training + evaluation**:
+2. **Run single training job**:
 ```bash
-python run_experiment.py configs/basic_sd3.yaml
+python run_experiment.py --config configs/flux.yaml
 ```
+
+3. **Run multiple training jobs sequentially**:
+```bash
+python run_experiment.py --config-dir configs/
+```
+
+#### Cloud Training (GCP Batch)
+
+1. **Setup GCP** (one-time):
+```bash
+python gcp_batch/setup_gcp.py --project YOUR_PROJECT_ID --create-buckets
+```
+
+2. **Launch parallel training**:
+```bash
+# Launch all configs to cloud
+python gcp_batch/launch_batch_training.py --all
+
+# Monitor progress
+python gcp_batch/check_batch_jobs.py --watch
+
+# Download results
+python gcp_batch/download_results.py --job <job-name>
+```
+
+See [gcp_batch/README.md](gcp_batch/README.md) for complete cloud training documentation.
 
 ### Detailed Workflows
 
@@ -113,16 +176,24 @@ python run_experiment.py configs/basic_sd3.yaml
 Generate captions for your training images:
 
 ```bash
-# Basic captioning
+# Basic captioning with OpenAI
 python captioning/llm_caption.py \
   --input_folder datasets/raw_images \
   --output_folder datasets/captioned_data
+
+# Use Google Gemini instead
+python captioning/llm_caption.py \
+  --input_folder datasets/raw_images \
+  --output_folder datasets/captioned_data \
+  --provider gemini \
+  --model gemini-2.0-flash-exp
 
 # Custom system prompt
 python captioning/llm_caption.py \
   --input_folder datasets/raw_images \
   --output_folder datasets/captioned_data \
-  --system_prompt_file prompts/product_prompt.txt
+  --system_prompt_file prompts/product_prompt.txt \
+  --trigger_word MYPRODUCT
 ```
 
 **Example system prompt** (`prompts/product_prompt.txt`):
