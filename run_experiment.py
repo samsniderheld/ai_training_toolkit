@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import gc
 import os
 import sys
 
@@ -23,10 +24,40 @@ except ImportError as e:
     print(f"Warning: AI Toolkit not available: {e}")
     TOOLKIT_AVAILABLE = False
     get_job = None
-    
 
-def run_single_config(config_path):
-    """Run a single config file"""
+# Try to import torch for GPU cleanup
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
+
+def clear_gpu_memory():
+    """Clear GPU memory and run garbage collection"""
+    if TORCH_AVAILABLE and torch.cuda.is_available():
+        print("\nCleaning up GPU memory...")
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+
+        # Show memory stats
+        allocated = torch.cuda.memory_allocated() / 1024**3
+        reserved = torch.cuda.memory_reserved() / 1024**3
+        print(f"GPU Memory: {allocated:.2f} GB allocated, {reserved:.2f} GB reserved")
+
+    # Run garbage collection
+    gc.collect()
+    print("Memory cleanup complete\n")
+
+
+def run_single_config(config_path, cleanup_gpu=False):
+    """
+    Run a single config file
+
+    Args:
+        config_path: Path to config file
+        cleanup_gpu: Whether to clean up GPU memory after training
+    """
     if not os.path.exists(config_path):
         print(f"Error: Config file not found: {config_path}")
         return False
@@ -44,10 +75,20 @@ def run_single_config(config_path):
         print("Starting training job...")
         job.run()
         print(f"Training completed successfully for: {config_path}")
+
+        # Clean up GPU memory if requested
+        if cleanup_gpu:
+            clear_gpu_memory()
+
         return True
 
     except Exception as e:
         print(f"Training failed for {config_path}: {e}")
+
+        # Clean up GPU memory even on failure
+        if cleanup_gpu:
+            clear_gpu_memory()
+
         return False
 
 
@@ -55,6 +96,8 @@ def main():
     parser = argparse.ArgumentParser(description="Run training experiment(s) with evaluation")
     parser.add_argument("--config", nargs="?", help="Path to YAML configuration file or directory containing config files")
     parser.add_argument("--config_dir", help="Directory containing multiple YAML config files (alternative to --config)")
+    parser.add_argument("--no-cleanup", action="store_true", help="Disable GPU memory cleanup between training jobs (not recommended for multiple configs)")
+    parser.add_argument("--force-cleanup", action="store_true", help="Force GPU memory cleanup even for single config")
 
     args = parser.parse_args()
 
@@ -96,7 +139,11 @@ def main():
             print(f"# Processing config {i}/{len(config_files)}")
             print(f"{'#'*60}")
 
-            success = run_single_config(config_file)
+            # Determine if GPU cleanup should be performed
+            # Default: cleanup for multiple configs, unless --no-cleanup is specified
+            cleanup_gpu = (len(config_files) > 1) and not args.no_cleanup
+
+            success = run_single_config(config_file, cleanup_gpu=cleanup_gpu)
             results.append((config_file, success))
 
         # Print summary
@@ -121,7 +168,9 @@ def main():
             sys.exit(1)
     else:
         # Single config file
-        success = run_single_config(config_input)
+        # Only cleanup if explicitly requested with --force-cleanup
+        cleanup_gpu = args.force_cleanup
+        success = run_single_config(config_input, cleanup_gpu=cleanup_gpu)
         if not success:
             sys.exit(1)
    
